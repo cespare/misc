@@ -27,15 +27,15 @@ func trampoline() // implemented in asm
 // A closure is the internal representation of a Go func.
 // (Actually a Go func is a pointer to one of these.)
 type closure struct {
-	code uintptr
-	ctx  uintptr
+	code unsafe.Pointer
+	ctx  unsafe.Pointer
 }
 
 // An iface is the internal representation of a Go interface.
 // The second value is always a pointer (as of Go 1.5).
 type iface struct {
-	typ uintptr
-	p   uintptr
+	typ unsafe.Pointer
+	p   unsafe.Pointer
 }
 
 func build(b []byte, f interface{}) {
@@ -49,14 +49,14 @@ func build(b []byte, f interface{}) {
 	// (Note that trampoline loads this pointer from the known register DX.)
 	tramp := trampoline // get a closure from trampoline
 	c := &closure{
-		code: **(**uintptr)(unsafe.Pointer(&tramp)),
-		ctx:  (*(*reflect.SliceHeader)(unsafe.Pointer(&b))).Data,
+		code: **(**unsafe.Pointer)(unsafe.Pointer(&tramp)),
+		ctx:  unsafe.Pointer(&b[0]),
 	}
 	f1 := *(*func())(unsafe.Pointer(&c))
 
 	// Modify f to replace its function pointer with f1.
 	fi := *(*iface)(unsafe.Pointer(&f))
-	*(*func())(unsafe.Pointer(fi.p)) = f1
+	*(*func())(fi.p) = f1
 }
 
 func main() {
