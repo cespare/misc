@@ -1,19 +1,14 @@
 package main
 
-import "reflect"
-
-// crash is a silly function that does
+// crash is a silly function that does roughly
 //   return b[len(b):len(b):len(b)]
 func crash(b []byte) []byte
 
-var x byte
-
 func main() {
 	for {
-		b := make([]byte, 32)
+		b := make([]byte, 1)
 		b0 := crash(b)
-		if !reflect.DeepEqual(b0, b0) {
-			panic("first")
-		}
+		var v interface{} = b0
+		_ = v
 	}
 }
