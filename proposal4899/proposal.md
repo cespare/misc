@@ -8,7 +8,8 @@ Discussion at https://golang.org/issue/TODO.
 
 ## Abstract
 
-This proposal is about fixing the long-standing issue golang/go#4899.
+This proposal is about fixing the long-standing issue
+[#4899](https://golang.org/issue/4899).
 
 When a test calls a helper function that invokes, for instance, `(*T).Error`,
 the line number that is printed for the test failure indicates the `Error` call
@@ -131,7 +132,8 @@ For instance, in https://golang.org/cl/12405043 @robpike writes
 > 
 >     t.Up(1).Error("this would be tagged with the caller's line number")
 
-@bradfitz mentions similar APIs in golang/go#4899 and golang/go#14128.
+@bradfitz mentions similar APIs in [#4899](https://golang.org/issue/4899) and
+[#14128](https://golang.org/issue/14128).
 
 The main tradeoff is that `Helper` is easier to use than `Up`, but less
 powerful. `Helper` is easier because the user doesn't have think about stack
@@ -186,7 +188,7 @@ The CL will be sent by April 30, 2016 in order to make the 1.9 release cycle.
 
 ## Open issues
 
-This change directly solves golang/go#4899.
+This change directly solves [#4899](https://golang.org/issue/4899).
 
-This change would likely help with the golang/go#14128, although it does not
-implement the feature requested there.
+This change would likely help with the [#14128](https://golang.org/issue/14128),
+although it does not implement the feature requested there.
