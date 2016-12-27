@@ -1,6 +1,6 @@
 # Proposal: testing: Better support test helpers with (TB).Helper
 
-Author(s): Caleb Spare, based on previous work by Josh Bleecher Snyder
+Authors: Caleb Spare and Josh Bleecher Snyder
 
 Last updated: [TODO]
 
@@ -138,9 +138,15 @@ powerful. `Helper` is easier because the user doesn't have think about stack
 frames. It is less powerful because the user does not have any choice about how
 far up the stack to skip.
 
-If we add `Helper` and later decide to add `Up` or something like it, we might
-regret having `Helper` as it would then be a less powerful version of another
-feature.
+It is not always easy to decide how many frames to skip, however: a helper
+may be called through multiple paths such that it may be a variable depth from
+the desired logging site. For example, in the cmd/go tests, the
+`(*testgoData).must` helper is called directly by some tests, but is also called
+by other helpers such as `(*testgoData).cd`. It would require the user to pass
+some state into this method in order to know whether to skip one or two frames.
+
+By contrast, using the `Helper` API, the user would simply mark both `must` and
+`cd` as helpers.
 
 ### Alternative 2: use a special Logf/Errorf/Fatalf sentinel
 
@@ -157,14 +163,6 @@ This seems roughly equivalent in power to our proposal, but it has downsides:
   it](https://github.com/golang/go/issues/14128#issuecomment-176456878))
 * The mechanism is unusual -- it lacks precedent in the standard library
 * `NoDecorate` is less obvious in godoc than a TB method
-
-### Alternative 3: do nothing
-
-Some folks have expressed dislike for test helpers in general. In
-https://golang.org/cl/12405043, @robpike says
-
-> I remain unconvinced, though, since it encourages the creation of testing
-> helpers, which are the devil's handiwork.
 
 ## Compatibility
 
