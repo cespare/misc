@@ -1,6 +1,6 @@
 # Proposal: testing: Better support test helpers with (TB).Helper
 
-Authors: Caleb Spare and Josh Bleecher Snyder
+Author: Caleb Spare, based on previous work by Josh Bleecher Snyder
 
 Last updated: [TODO]
 
@@ -11,15 +11,15 @@ Discussion at https://golang.org/issue/TODO.
 This proposal is about fixing the long-standing issue
 [#4899](https://golang.org/issue/4899).
 
-When a test calls a helper function that invokes, for instance, `(*T).Error`,
-the line number that is printed for the test failure indicates the `Error` call
-site, inside the helper method. This can be unhelpful for pinpointing which
-helper call failed.
+When a test calls a helper function that invokes, for instance,
+`"*testing.T".Error`, the line number that is printed for the test failure
+indicates the `Error` call site as inside the helper method. This is almost
+always unhelpful for pinpointing the actual failure.
 
-We propose to add a new `TB` method called `Helper` which marks a function as a
-test helper. When logging test messages, package testing ignores frames that are
-inside marked helper functions and instead prints the first stack position
-inside a non-helper function.
+We propose to add a new `testing.TB` method, `Helper`, which marks the calling
+function as a test helper. When logging test messages, package testing ignores
+frames that are inside marked helper functions. It prints the first stack
+position inside a non-helper function.
 
 ## Background
 
@@ -30,24 +30,29 @@ non-trivial check. These are often of the form
 
 though other variants exist. Such helper functions may be local to the test
 package or may come from external packages. There are many examples of such
-helper functions in the standard library tests (some are listed below).
+helper functions in the standard library tests. Some are listed below.
 
-When a helper function calls a method of `t` such as `t.Error` or `t.Fatal`, the
-resulting error message includes a file:lineno that indicates the
-`t.Error`/`t.Fatal` callsite within the helper method. If the helper is called
-from more than one place, it is not clear from that line number where in the
-test proper the failure arose.
+When a helper function calls `t.Error`, `t.Fatal`, or a related method, the
+error message includes file:lineno output that indicates the
+location of the failure. The failure location is currently considered inside the
+helper method, which is unhelpful.
+
+The misplaced failure location also inhibits useful IDE features like
+automatically jumping to the failure position.
 
 There are a variety of workarounds to which people have resorted.
 
 ### 1. Ignore the problem, making it harder to debug test failures
 
-This is a common approach. If the helper is only called once from the `Test*`
-function, then the problem is less severe: the test failure prints the name of
-the `Test*` function that failed, and by locating the only call to the helper
-within that function, the user knows the failure site. This is an annoyance, but
-it is less bad than when the helper is called more than once: in those cases, it
-can be impossible to locate the source of the failure without further debugging.
+This is a common approach.
+
+If the helper is only called once from the `Test*` function, then the problem is
+less severe: the test failure prints the name of the `Test*` function that
+failed, and by locating the only call to the helper within that function, the
+user knows the failure site. This is just an annoyance.
+
+When the helper is called more than once, it can be impossible to locate the
+source of the failure without further debugging.
 
 A few examples of this pattern in the standard library:
 
@@ -69,11 +74,11 @@ A few examples of this pattern in the standard library:
 
 ### 2. Pass around more context to be printed as part of the error message
 
-This approach allows for showing enough information in the failure message to
-pinpoint the source of failure at the cost of greater burden on the test writer.
-The result still isn't entirely satisfactory for the test invoker: if the user
-only looks at the file:lineno in the failure message, they are still led astray
-until they examine the full message.
+This approach adds enough information to the failure message to pinpoint the
+source of failure, at the cost of greater burden on the test writer. The result
+still isn't entirely satisfactory for the test invoker: if the user only looks
+at the file:lineno in the failure message, they are still led astray until they
+examine the full message.
 
 Some standard library examples:
 
@@ -109,15 +114,14 @@ We propose to add two methods in package testing:
 When package testing prints file:lineno, it walks up the stack, skipping helper
 functions, and chooses the first entry in a non-helper function.
 
-We also propose to add `Helper()` to the `TB` interface.
+We also propose to add `Helper()` to the `testing.TB` interface.
 
 ## Rationale
 
 ### Alternative 1: allow the user to specify how many stack frames to skip
 
-Some other suggested fixes for this issue involve giving the user control over
-the number of stack frames to skip. This is similar to what package log already
-provides:
+An alternative fix is to give the user control over the number of stack frames
+to skip. This is similar to what package log already provides:
 
     func Output(calldepth int, s string) error
     func (l *Logger) Output(calldepth int, s string) error
@@ -135,20 +139,16 @@ For instance, in https://golang.org/cl/12405043 @robpike writes
 @bradfitz mentions similar APIs in [#4899](https://golang.org/issue/4899) and
 [#14128](https://golang.org/issue/14128).
 
-The main tradeoff is that `Helper` is easier to use than `Up`, but less
-powerful. `Helper` is easier because the user doesn't have think about stack
-frames. It is less powerful because the user does not have any choice about how
-far up the stack to skip.
+`Helper` is easier to use, because the user doesn't have to think about stack
+frames, and it does not break when refactoring.
 
-It is not always easy to decide how many frames to skip, however: a helper
-may be called through multiple paths such that it may be a variable depth from
-the desired logging site. For example, in the cmd/go tests, the
-`(*testgoData).must` helper is called directly by some tests, but is also called
-by other helpers such as `(*testgoData).cd`. It would require the user to pass
-some state into this method in order to know whether to skip one or two frames.
-
-By contrast, using the `Helper` API, the user would simply mark both `must` and
-`cd` as helpers.
+Also, it is not always easy to decide how many frames to skip. A helper may be
+called through multiple paths, so it may be a variable depth from the desired
+logging site. For example, in the cmd/go tests, the `"*testgoData".must` helper
+is called directly by some tests, but is also called by other helpers such as
+`"*testgoData".cd`. Manual stack control would require the user to pass state
+into this method in order to know whether to skip one or two frames. Using the
+`Helper` API, the user would simply mark both `must` and `cd` as helpers.
 
 ### Alternative 2: use a special Logf/Errorf/Fatalf sentinel
 
@@ -162,17 +162,20 @@ This seems roughly equivalent in power to our proposal, but it has downsides:
 
 * It breaks usual `printf` conventions (@adg [points out that vet would have to
   be aware of
-  it](https://github.com/golang/go/issues/14128#issuecomment-176456878))
-* The mechanism is unusual -- it lacks precedent in the standard library
-* `NoDecorate` is less obvious in godoc than a TB method
+  it](https://github.com/golang/go/issues/14128#issuecomment-176456878)).
+* The mechanism is unusual -- it lacks precedent in the standard library.
+* `NoDecorate` is less obvious in godoc than a TB method.
+* Every `testing.T` method in a helper method must be decorated.
+* It is not clear how to handle nested helpers other than by manually specifying
+  the number of stack frames to skip, inheriting the problems of alternative 1.
 
 ## Compatibility
 
-Adding a method to `*T` and `*B` raises no compatibility issues.
+Adding a method to `*testing.T` and `*testing.B` raises no compatibility issues.
 
-We will also add the method to the `TB` interface. Normally changing interface
-method sets is verboten, but in this case it is be fine because `TB` has a
-private method specifically to prevent other implementations:
+We will also add the method to the `testing.TB` interface. Normally changing
+interface method sets is verboten, but in this case it is be fine because `TB`
+has a private method specifically to prevent other implementations:
 
     // A private method to prevent users implementing the
     // interface and so future additions to it will not
@@ -181,8 +184,8 @@ private method specifically to prevent other implementations:
 
 ## Implementation
 
-@cespare will send a CL implementing `(TB).Helper`, based on the previous work
-of @josharian in https://golang.org/cl/79890043.
+@cespare will send a CL implementing `"testing.TB".Helper`, based on
+@josharian's previous work in https://golang.org/cl/79890043.
 
 The CL will be sent by April 30, 2016 in order to make the 1.9 release cycle.
 
