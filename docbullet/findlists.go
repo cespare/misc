@@ -44,13 +44,13 @@ func processDir(dir string) error {
 	if err != nil {
 		return err
 	}
-	for _, pkg := range sortedPackages(pkgs) {
+	for _, pkg := range sortPackages(pkgs) {
 		p := doc.New(pkg, "", 0)
 		process := func(doc, whence string) {
 			if interesting(doc) {
 				fmt.Println(whence)
-				fmt.Println(doc)
-				fmt.Println()
+				//fmt.Println(doc)
+				//fmt.Println()
 			}
 		}
 		process(p.Doc, p.Name)
@@ -70,21 +70,25 @@ func processDir(dir string) error {
 	return nil
 }
 
-func sortedPackages(m map[string]*ast.Package) []*ast.Package {
+func sortPackages(m map[string]*ast.Package) []*ast.Package {
 	var names []string
 	for name := range m {
 		names = append(names, name)
 	}
 	sort.Strings(names)
-	pkgs := make([]*ast.Package, len(names))
-	for i, name := range names {
-		pkgs[i] = m[name]
+	var pkgs []*ast.Package
+	for _, name := range names {
+		if name == "main" {
+			continue
+		}
+		pkgs = append(pkgs, m[name])
 	}
 	return pkgs
 }
 
 func interesting(doc string) bool {
 	typ := findLists(doc)
+	//return typ > 0
 	return typ&listTypeMalformed > 0
 }
 
@@ -92,12 +96,12 @@ var listRegexps = []struct {
 	re  *regexp.Regexp
 	typ listType
 }{
-	{regexp.MustCompile(`^\s*-[\w ]`), listTypeHyphen},
-	{regexp.MustCompile(`^\s*\+[\w ]`), listTypePlus},
-	{regexp.MustCompile(`^\s*\*[\w ]`), listTypeStar},
-	{regexp.MustCompile(`^\s*•[\w ]`), listTypeUnicode},
+	{regexp.MustCompile(`^\s*- `), listTypeHyphen},
+	{regexp.MustCompile(`^\s*\+ `), listTypePlus},
+	{regexp.MustCompile(`^\s*\* `), listTypeStar},
+	{regexp.MustCompile(`^\s*• `), listTypeUnicode},
 	{regexp.MustCompile(`^\s*[0-9][)\.] `), listTypeNumber},
-	{regexp.MustCompile(`^-[\w ]`), listTypeMalformed},
+	{regexp.MustCompile(`^[-+*] `), listTypeMalformed},
 }
 
 func findLists(doc string) listType {
