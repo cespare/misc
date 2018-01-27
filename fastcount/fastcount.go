@@ -11,6 +11,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	_ "unsafe"
 )
 
 type counter interface {
@@ -51,20 +52,43 @@ type counterShard struct {
 	pad [cacheLineSize - 8]byte
 }
 
-type shardedCounter struct {
+type rdtscpCounter struct {
 	shards []counterShard
 }
 
-func newShardedCounter() shardedCounter {
-	return shardedCounter{shards: make([]counterShard, numCores)}
+func newRDTSCPCounter() rdtscpCounter {
+	return rdtscpCounter{shards: make([]counterShard, numCores)}
 }
 
-func (c shardedCounter) inc() {
+func (c rdtscpCounter) inc() {
 	i := getCore()
 	atomic.AddInt64(&c.shards[i].n, 1)
 }
 
-func (c shardedCounter) getAndZero() int64 {
+func (c rdtscpCounter) getAndZero() int64 {
+	var n int64
+	for i := range c.shards {
+		n += atomic.SwapInt64(&c.shards[i].n, 0)
+	}
+	return n
+}
+
+type noopPinCounter struct {
+	shards []counterShard
+}
+
+func newNoopPinCounter() noopPinCounter {
+	return noopPinCounter{
+		shards: make([]counterShard, runtime.GOMAXPROCS(0)),
+	}
+}
+
+func (c noopPinCounter) inc() {
+	i := getPID()
+	atomic.AddInt64(&c.shards[i].n, 1)
+}
+
+func (c noopPinCounter) getAndZero() int64 {
 	var n int64
 	for i := range c.shards {
 		n += atomic.SwapInt64(&c.shards[i].n, 0)
@@ -97,9 +121,36 @@ func init() {
 
 func getCore() int
 
+//go:linkname procPin runtime.procPin
+//go:nosplit
+func procPin() int
+
+//go:linkname procUnpin runtime.procUnpin
+//go:nosplit
+func procUnpin()
+
+func getPID() int {
+	pid := procPin()
+	procUnpin()
+	return pid
+}
+
+func getPID2() int
+
 func main() {
 	typ := flag.String("type", "mutex", "counter type")
 	flag.Parse()
+
+	//var wg sync.WaitGroup
+	//for i := 0; i < 50; i++ {
+	//        wg.Add(1)
+	//        go func() {
+	//                fmt.Println(getPID2())
+	//                wg.Done()
+	//        }()
+	//}
+	//wg.Wait()
+	//os.Exit(0)
 
 	var c counter
 	switch *typ {
@@ -107,8 +158,10 @@ func main() {
 		c = new(mutexCounter)
 	case "atomic":
 		c = new(atomicCounter)
-	case "sharded":
-		c = newShardedCounter()
+	case "rdtscp":
+		c = newRDTSCPCounter()
+	case "nooppin":
+		c = newNoopPinCounter()
 	default:
 		log.Fatalf("unknown counter type %q", *typ)
 	}
