@@ -135,22 +135,9 @@ func getPID() int {
 	return pid
 }
 
-func getPID2() int
-
 func main() {
-	typ := flag.String("type", "mutex", "counter type")
+	typ := flag.String("type", "mutex", `counter type ("mutex", "atomic", "rdtscp", "nooppin")`)
 	flag.Parse()
-
-	//var wg sync.WaitGroup
-	//for i := 0; i < 50; i++ {
-	//        wg.Add(1)
-	//        go func() {
-	//                fmt.Println(getPID2())
-	//                wg.Done()
-	//        }()
-	//}
-	//wg.Wait()
-	//os.Exit(0)
 
 	var c counter
 	switch *typ {
@@ -183,7 +170,7 @@ func main() {
 	for range time.Tick(interval) {
 		n := c.getAndZero()
 		incsPerSec := float64(n) / interval.Seconds()
-		latency := (interval / time.Duration(n)) * time.Duration(numWorkers)
+		latency := interval * time.Duration(numWorkers) / time.Duration(n)
 		fmt.Printf("%.0f incs/sec; %.0f incs/sec/worker; avg latency %s\n",
 			incsPerSec, incsPerSec/float64(numWorkers), latency)
 	}

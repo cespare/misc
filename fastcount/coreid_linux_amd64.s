@@ -12,11 +12,3 @@ TEXT ·getCore(SB), NOSPLIT, $0
 	ANDQ $0xff, CX
 	MOVQ CX, ret+0(FP)
 	RET
-
-// func getPID2() int
-TEXT ·getPID2(SB), NOSPLIT, $0
-	//get_tls(CX)
-	//MOVQ g(CX), AX
-	//MOVQ g_m(AX), CX
-
-	//MOVQ CX, ret+0(FP)
