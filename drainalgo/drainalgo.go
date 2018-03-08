@@ -15,28 +15,38 @@ import (
 	"time"
 )
 
+// A pool is the common interface for the various implementations.
 type pool interface {
-	get() interface{}
-	put(interface{})
+	// get an item (no need to do anything with it).
+	get() (hit bool)
+	// put an item into the pool.
+	put()
+	// gc is called whenever a garbage collection occurs,
+	// since our non-sync.Pool implementations don't have access
+	// to the runtime hooks.
 	gc()
+	// size returns the current live size of the pool.
 	size() int
 }
 
+// syncPool wraps the real sync.Pool implementation.
+// It also tracks the live size separately.
 type syncPool struct {
 	p sync.Pool
 	n int64
 }
 
-func (p *syncPool) get() interface{} {
+func (p *syncPool) get() bool {
 	x := p.p.Get()
-	if x != nil {
-		atomic.AddInt64(&p.n, -1)
+	if x == nil {
+		return false
 	}
-	return x
+	atomic.AddInt64(&p.n, -1)
+	return true
 }
 
-func (p *syncPool) put(x interface{}) {
-	p.p.Put(x)
+func (p *syncPool) put() {
+	p.p.Put(new(int))
 	atomic.AddInt64(&p.n, 1)
 }
 
@@ -48,27 +58,29 @@ func (p *syncPool) size() int {
 	return int(atomic.LoadInt64(&p.n))
 }
 
+// simpleSyncPool is a simplistic simulation of the sync.Pool implementation.
+// Items are added to a shared pool which is cleared on each collection.
+// Unlike the real sync.Pool, there are no per-P private items.
 type simpleSyncPool struct {
 	mu    sync.Mutex
-	items []interface{}
+	items []int
 }
 
-func (p *simpleSyncPool) get() interface{} {
+func (p *simpleSyncPool) get() bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	n := len(p.items)
 	if n == 0 {
-		return nil
+		return false
 	}
-	x := p.items[n-1]
 	p.items = p.items[:n-1]
-	return x
+	return true
 }
 
-func (p *simpleSyncPool) put(x interface{}) {
+func (p *simpleSyncPool) put() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	p.items = append(p.items, x)
+	p.items = append(p.items, 0)
 }
 
 func (p *simpleSyncPool) gc() {
@@ -83,14 +95,18 @@ func (p *simpleSyncPool) size() int {
 	return len(p.items)
 }
 
+// maxLivePool simulates the "max live set" heuristic I described in
+// https://github.com/golang/go/issues/22950#issuecomment-348653747:
+// at each GC, we trim the pool down to the maximum live set size
+// during the cycle.
 type maxLivePool struct {
 	mu      sync.Mutex
-	items   []interface{}
+	items   []int
 	live    int
 	maxLive int
 }
 
-func (p *maxLivePool) get() interface{} {
+func (p *maxLivePool) get() bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.live++
@@ -99,18 +115,17 @@ func (p *maxLivePool) get() interface{} {
 	}
 	n := len(p.items)
 	if n == 0 {
-		return nil
+		return false
 	}
-	x := p.items[n-1]
 	p.items = p.items[:n-1]
-	return x
+	return true
 }
 
-func (p *maxLivePool) put(x interface{}) {
+func (p *maxLivePool) put() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.live--
-	p.items = append(p.items, x)
+	p.items = append(p.items, 0)
 }
 
 func (p *maxLivePool) gc() {
@@ -128,31 +143,34 @@ func (p *maxLivePool) size() int {
 	return len(p.items)
 }
 
+// minDeadPool simulates the "min dead set" heuristic described by Austin in
+// https://github.com/golang/go/issues/22950#issuecomment-352935997:
+// at each GC, we evict as many items from the pool as was the minimum occupancy
+// of the pool during the cycle.
 type minDeadPool struct {
 	mu      sync.Mutex
-	items   []interface{}
+	items   []int
 	minDead int
 }
 
-func (p *minDeadPool) get() interface{} {
+func (p *minDeadPool) get() bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	n := len(p.items)
 	if n == 0 {
-		return nil
+		return false
 	}
-	x := p.items[n-1]
 	p.items = p.items[:n-1]
 	if len(p.items) < p.minDead {
 		p.minDead = len(p.items)
 	}
-	return x
+	return true
 }
 
-func (p *minDeadPool) put(x interface{}) {
+func (p *minDeadPool) put() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	p.items = append(p.items, x)
+	p.items = append(p.items, 0)
 }
 
 func (p *minDeadPool) gc() {
@@ -185,25 +203,12 @@ func main() {
 	var p pool
 	switch *poolType {
 	case "sync.Pool":
-		// Use the real sync.Pool implementation.
 		p = new(syncPool)
 	case "simple":
-		// This is a simplistic simulation of the sync.Pool
-		// implementation. Items are added to a big shared pool and the
-		// whole pool is cleared on each collection. Unlike the real
-		// sync.Pool, there are no per-P private items.
 		p = new(simpleSyncPool)
 	case "maxlive":
-		// This simulates the "max live set" heuristic I described in
-		// https://github.com/golang/go/issues/22950#issuecomment-348653747:
-		// at each GC, we trim the pool down to the maximum live set
-		// size during the cycle.
 		p = new(maxLivePool)
 	case "mindead":
-		// This simulates the "min dead set" heuristic described by Austin in
-		// https://github.com/golang/go/issues/22950#issuecomment-352935997:
-		// at each GC, we evict as many items from the pool as was the
-		// minimum occupancy of the pool during the cycle.
 		p = new(minDeadPool)
 	default:
 		log.Fatalf("Unknown pool type %q", *poolType)
@@ -255,15 +260,13 @@ func main() {
 		for {
 			time.Sleep(getDelay(*getInterval))
 			go func() {
-				x := p.get()
-				if x == nil {
-					atomic.AddInt64(&misses, 1)
-					x = new(int)
-				} else {
+				if p.get() {
 					atomic.AddInt64(&hits, 1)
+				} else {
+					atomic.AddInt64(&misses, 1)
 				}
 				time.Sleep(holdDelay(*holdInterval))
-				p.put(x)
+				p.put()
 			}()
 		}
 	}()
@@ -278,11 +281,14 @@ func main() {
 		avgPoolSize := totalObservedSize / sizeObservations
 		sizeMu.Unlock()
 		log.Printf(
-			"%d gets (%.1f/sec) / %.1f%% hit rate / %.1f avg live size / %d GCs (%.3f/sec)",
-			gets, float64(gets)/secs,
+			"%4.0fs: %d gets (%.1f/sec) / %.2f%% hit rate / %.2f avg pool size / %d GCs (%.3f/sec)",
+			secs,
+			gets,
+			float64(gets)/secs,
 			float64(hits)/float64(gets)*100,
 			avgPoolSize,
-			numGCs, float64(numGCs)/secs,
+			numGCs,
+			float64(numGCs)/secs,
 		)
 	}
 }
