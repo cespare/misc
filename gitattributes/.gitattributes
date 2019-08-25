@@ -1,0 +1,3 @@
+a.txt linguist-generated=true
+*.md linguist-generated
+b.md -linguist-generated
