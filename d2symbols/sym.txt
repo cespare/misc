@@ -1,0 +1,26 @@
+E -> T -> A -> M
+
+
+
+E E E
+A E E
+E E E
+
+1 ->
+
+T T T
+M E E
+T E E
+
+7 ->
+
+A T T
+E E E
+A T T
+
+5 ->
+
+A A T
+T T T
+A A T
+
