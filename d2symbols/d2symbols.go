@@ -97,7 +97,7 @@ func nextSymbol(sym byte) byte {
 func main() {
 	log.SetFlags(0)
 	if len(os.Args) != 2 {
-		log.Fatal("Usage: `d2symbols 'A:EEEAEETMT'` (for example)")
+		log.Fatal("Usage: `d2symbols 'T:AMAEMEMTM'` (for example)")
 	}
 
 	g, err := parseInput(os.Args[1])
