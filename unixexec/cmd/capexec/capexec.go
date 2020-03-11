@@ -8,11 +8,10 @@ import (
 	"os/user"
 	"runtime"
 	"strconv"
+	"strings"
 	"unsafe"
 
 	"golang.org/x/sys/unix"
-
-	"liftoff/go/confutil"
 )
 
 // capabilities is the kernel struct described in 'man 2 capget'.
@@ -32,8 +31,7 @@ func main() {
 	log.SetFlags(0)
 	// FIXME(caleb): Implement the colon-based uid/gid syntax from chpst.
 	username := flag.String("user", "", "User to run process as")
-	var capNames confutil.Strings
-	flag.Var(&capNames, "cap", "Add this `capability` to process")
+	capNames := flag.String("caps", "", "Add these capabilities to process (comma-separated list)")
 	flag.Parse()
 
 	args := flag.Args()
@@ -59,8 +57,9 @@ func main() {
 		gid = uintptr(gid64)
 	}
 
-	capIDs := make([]uintptr, len(capNames.Slice))
-	for i, cap := range capNames.Slice {
+	caps := strings.Split(*capNames, ",")
+	capIDs := make([]uintptr, len(caps))
+	for i, cap := range caps {
 		var id uintptr
 		// Capabilities are defined in uapi/linux/capability.h.
 		switch cap {
