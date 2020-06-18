@@ -9,9 +9,8 @@ require (
 	github.com/chzyer/test v0.0.0-20180213035817-a1ea475d72b1 // indirect
 	github.com/dustin/go-humanize v1.0.0
 	github.com/lib/pq v1.3.0
-	github.com/russross/blackfriday/v2 v2.0.1
-	github.com/shurcooL/sanitized_anchor_name v1.0.0 // indirect
 	github.com/vaughan0/go-ini v0.0.0-20130923145212-a98ad7ee00ec
+	github.com/yuin/goldmark v1.1.32
 	golang.org/x/sys v0.0.0-20190215142949-d0b11bdaac8a
 )
 
