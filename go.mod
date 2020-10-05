@@ -7,7 +7,10 @@ require (
 	github.com/chzyer/readline v0.0.0-20180603132655-2972be24d48e
 	github.com/dustin/go-humanize v1.0.0
 	github.com/felixge/fgprof v0.9.1
-	github.com/lib/pq v1.3.0
+	github.com/go-chi/chi/v4 v4.0.0-rc1
+	github.com/gorilla/mux v1.8.0
+	github.com/julienschmidt/httprouter v1.3.0
+	github.com/lib/pq v1.8.0
 	github.com/vaughan0/go-ini v0.0.0-20130923145212-a98ad7ee00ec
 	github.com/yuin/goldmark v1.1.32
 	golang.org/x/sys v0.0.0-20191204072324-ce4227a45e2e
