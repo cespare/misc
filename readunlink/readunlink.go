@@ -4,9 +4,13 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"os"
+	"time"
+
+	"github.com/kr/pretty"
 )
 
 func main() {
@@ -51,7 +55,7 @@ func run() error {
 		}
 	}()
 
-	stat, err := os.Stat(filename)
+	err := check()
 	<-done
 
 	if err != nil {
@@ -59,13 +63,34 @@ func run() error {
 			// This is one of the expected outcomes.
 			return nil
 		}
-		return fmt.Errorf("unexpected error stat-ing test file: %s", err)
-	}
-	if got, want := stat.Size(), int64(len(msg)); got != want {
-		return fmt.Errorf("stat(%q) gave size %d; expected %d", filename, got, want)
+		return err
 	}
 
 	// This is the other expected outcome.
 	return nil
 
+}
+
+func check() error {
+	f, err := os.Open(filename)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	n, err := io.Copy(ioutil.Discard, f)
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		stat, err := f.Stat()
+		if err != nil {
+			panic(err)
+		}
+		fmt.Println(stat.ModTime().Equal(time.Unix(0, 0)))
+		fmt.Println(stat.Size())
+		pretty.Println(stat.Sys())
+		return errors.New("zero size")
+	}
+	return nil
 }
