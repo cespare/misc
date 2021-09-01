@@ -1,0 +1,9 @@
+syntax = "proto3";
+
+package x;
+
+option go_package = "github.com/cespare/misc/prototest/x";
+
+message Foo {
+  int64 bar = 1;
+}
