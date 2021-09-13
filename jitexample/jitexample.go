@@ -12,15 +12,6 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-// instructions is the assembled form of the following which adds two numbers.
-// This uses the Go ABI0 calling convention. (Intel syntax.)
-//
-// mov rax, [rsp+8]
-// add rax, [rsp+16]
-// mov [rsp+24], rax
-// ret
-const instructions = "488b 4424 0848 0344 2410 4889 4424 18c3"
-
 // A closure is the internal representation of a Go func.
 // (Actually a Go func is a pointer to one of these.)
 type closure struct {
