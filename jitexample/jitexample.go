@@ -6,23 +6,20 @@ import (
 	"log"
 	"os"
 	"reflect"
+	"strings"
 	"unsafe"
 
 	"golang.org/x/sys/unix"
 )
 
 // instructions is the assembled form of the following which adds two numbers.
-// rdi points to the beginning of a Go function stack frame.
-// (Intel syntax.)
+// This uses the Go ABI0 calling convention. (Intel syntax.)
 //
-// mov rax, [rdi]
-// add rax, [rdi+8]
-// mov [rdi+16], rax
+// mov rax, [rsp+8]
+// add rax, [rsp+16]
+// mov [rsp+24], rax
 // ret
-//
-const instructions = "488b074803470848894710c3"
-
-func trampoline() // implemented in asm
+const instructions = "488b 4424 0848 0344 2410 4889 4424 18c3"
 
 // A closure is the internal representation of a Go func.
 // (Actually a Go func is a pointer to one of these.)
@@ -44,14 +41,9 @@ func build(b []byte, f interface{}) {
 		panic("build requires pointer to func")
 	}
 
-	// Synthesize a a closure that points at the trampoline but has the
-	// address of the buffer code as its context.
-	// (Note that trampoline loads this pointer from the known register DX.)
-	tramp := trampoline // get a closure from trampoline
-	c := &closure{
-		code: **(**unsafe.Pointer)(unsafe.Pointer(&tramp)),
-		ctx:  unsafe.Pointer(&b[0]),
-	}
+	// Synthesize a closure that points to the provided code.
+	// We don't use the closed-over fields so we leave ctx null.
+	c := &closure{code: unsafe.Pointer(&b[0])}
 	f1 := *(*func())(unsafe.Pointer(&c))
 
 	// Modify f to replace its function pointer with f1.
@@ -60,7 +52,7 @@ func build(b []byte, f interface{}) {
 }
 
 func main() {
-	instr, err := hex.DecodeString(instructions)
+	instr, err := hex.DecodeString(strings.ReplaceAll(instructions, " ", ""))
 	if err != nil {
 		panic(err)
 	}
