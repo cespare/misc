@@ -12,6 +12,7 @@ require (
 	github.com/julienschmidt/httprouter v1.3.0
 	github.com/kr/pretty v0.2.1
 	github.com/lib/pq v1.8.0
+	github.com/ua-parser/uap-go v0.0.0-20210824134941-3b2ceb1c75a3
 	github.com/vaughan0/go-ini v0.0.0-20130923145212-a98ad7ee00ec
 	github.com/yuin/goldmark v1.3.5
 	golang.org/x/net v0.0.0-20210405180319-a5a99cb37ef4 // indirect
