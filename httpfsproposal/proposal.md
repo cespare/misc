@@ -2,8 +2,7 @@
 
 ## Abstract
 
-To better interoperate with `io/fs`, I propose adding two functions to
-`net/http`.
+To better interoperate with `io/fs`, I propose adding two functions to `net/http`.
 
 * `ServeFSFile`, the `io/fs`-based analogue to `ServeFile`.
 
@@ -21,11 +20,9 @@ The `net/http` package provides three built-in ways of serving files:
 * `ServeContent`, which serves a file from an `io.ReadSeeker` and some additional metadata
 * `FileSystem`, which is turned into a `Handler` using `FileServer`
 
-These were written before the `io/fs` package existed and do not work with those
-interfaces.
+These were written before the `io/fs` package existed and do not work with those interfaces.
 
-As part of adding `io/fs`, `net/http` gained `FS` which converts an `io.FS`
-into a `FileSystem`.
+As part of adding `io/fs`, `net/http` gained `FS` which converts an `io.FS` into a `FileSystem`.
 
 However, `ServeFile` and `ServeContent` have no `fs.FS`-based equivalents.
 
@@ -33,8 +30,7 @@ However, `ServeFile` and `ServeContent` have no `fs.FS`-based equivalents.
 
 ### `ServeFSFile`
 
-`ServeFile` lets the caller easily serve the contents of a single file from the
-OS file system.
+`ServeFile` lets the caller easily serve the contents of a single file from the OS file system.
 
 `ServeFSFile` lets the caller do the same for an `fs.FS`.
 
@@ -46,19 +42,13 @@ OS file system.
 func ServeFSFile(w ResponseWriter, r *Request, fsys fs.FS, name string)
 ```
 
-Both of these functions take a filename. The name passed to `ServeFile` is
-OS-specific; the name passed to `ServeFSFile` follows the `io/fs` convention
-(slash-separated paths).
+Both of these functions take a filename. The name passed to `ServeFile` is OS-specific; the name passed to `ServeFSFile` follows the `io/fs` convention (slash-separated paths).
 
 ### `ServeFSContent`
 
-`ServeContent` is a lower-level function intended to serve the content of any
-file-like object. Unfortunately, it is not compatible with `io/fs`.
+`ServeContent` is a lower-level function intended to serve the content of any file-like object. Unfortunately, it is not compatible with `io/fs`.
 
-`ServeContent` takes an `io.ReadSeeker`; seeking is used to determine the
-size of the file. An `fs.File` is not (necessarily) a `Seeker`. However, the
-`fs.FileInfo` interface provides the file's size as well as name and
-modification time.
+`ServeContent` takes an `io.ReadSeeker`; seeking is used to determine the size of the file. An `fs.File` is not (necessarily) a `Seeker`. However, the `fs.FileInfo` interface provides the file's size as well as name and modification time.
 
 Therefore, instead of
 
@@ -102,34 +92,22 @@ func ServeFSContent(w ResponseWriter, r *Request, info fs.FileInfo, content io.R
 
 ### Should these functions instead be implemented outside the standard library?
 
-It is not trivial to implement these functions outside of `net/http`. The
-proposed functions are building blocks upon which *other* functionality can be
-built; it is not possible to write these functions simply in terms of the
-existing `net/http` API.
+It is not trivial to implement these functions outside of `net/http`. The proposed functions are building blocks upon which *other* functionality can be built; it is not possible to write these functions simply in terms of the existing `net/http` API.
 
-The `ServeFile` and `ServeContent` functions do quite a lot of subtle
-work (path cleaning, redirects, translating OS errors to HTTP responses,
-content-type sniffing, and more). Implementing this proposal outside of
-`net/http` requires either copying a lot of its internal code or reimplementing
-a good amount of functionality (some of which comes with security implications).
+The `ServeFile` and `ServeContent` functions do quite a lot of subtle work (path cleaning, redirects, translating OS errors to HTTP responses, content-type sniffing, and more). Implementing this proposal outside of `net/http` requires either copying a lot of its internal code or reimplementing a good amount of functionality (some of which comes with security implications).
 
-I believe that we should add these proposed functions to `net/http` so that it
-supports `io/fs` just as well as it supports OS files.
+I believe that we should add these proposed functions to `net/http` so that it supports `io/fs` just as well as it supports OS files.
 
 ### Should `ServeFSContent` have a different signature?
 
-We could simplify the signature of `ServeFSContent` by having it take an
-`fs.File`:
+We could simplify the signature of `ServeFSContent` by having it take an `fs.File`:
 
     func ServeFSContent(w ResponseWriter, r *Request, f fs.File)
 
 and then `ServeFSContent` would call `f.Stat` itself.
 
-That's not entirely satisfying; it seems to be unusual to pass an `fs.File`
-around separately from an `fs.FS`, and `Close` is not used.
+That's not entirely satisfying; it seems to be unusual to pass an `fs.File` around separately from an `fs.FS`, and `Close` is not used.
 
-Another option would be to pass in all the fields explicitly. (This is the same
-as `ServeContent` except that instead of a `ReadSeeker` we pass in the size.)
-Since this is now not `io/fs`-specific at all, I gave it a new name:
+Another option would be to pass in all the fields explicitly. (This is the same as `ServeContent` except that instead of a `ReadSeeker` we pass in the size.) Since this is now not `io/fs`-specific at all, I gave it a new name:
 
     func ServeReader(w http.ResponseWriter, r *Request, name string, modtime time.Time, size int64, content io.Reader)
