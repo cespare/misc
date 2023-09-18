@@ -171,7 +171,9 @@ func main() {
 		n := c.getAndZero()
 		incsPerSec := float64(n) / interval.Seconds()
 		latency := interval * time.Duration(numWorkers) / time.Duration(n)
-		fmt.Printf("%.0f incs/sec; %.0f incs/sec/worker; avg latency %s\n",
-			incsPerSec, incsPerSec/float64(numWorkers), latency)
+		fmt.Printf(
+			"%.0f incs/sec; %.0f incs/sec/worker; avg latency %s\n",
+			incsPerSec, incsPerSec/float64(numWorkers), latency,
+		)
 	}
 }
