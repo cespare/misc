@@ -1,8 +1,6 @@
 module github.com/cespare/misc
 
-go 1.21
-
-toolchain go1.21.0
+go 1.23.0
 
 require (
 	github.com/aws/aws-sdk-go v1.29.21
@@ -12,7 +10,6 @@ require (
 	github.com/dustin/go-humanize v1.0.0
 	github.com/felixge/fgprof v0.9.1
 	github.com/go-chi/chi/v4 v4.0.0-rc1
-	github.com/go-json-experiment/json v0.0.0-20230922184908-dc36ffcf8533
 	github.com/gorilla/mux v1.8.0
 	github.com/julienschmidt/httprouter v1.3.0
 	github.com/kr/pretty v0.2.1
