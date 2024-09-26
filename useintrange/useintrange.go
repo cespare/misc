@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"go/ast"
 	"go/token"
 	"go/types"
@@ -13,7 +14,11 @@ import (
 	"rsc.io/edit"
 )
 
-var verbose = flag.Bool("v", false, "Operate in verbose mode")
+var (
+	verbose  = flag.Bool("v", false, "Operate in verbose mode")
+	fix      = flag.Bool("fix", false, "Fix the code instead of printing warnings")
+	nonConst = flag.Bool("nonconst", false, "Include non-constant range vars (lots of false positives!)")
+)
 
 func main() {
 	log.SetFlags(0)
@@ -42,7 +47,9 @@ func main() {
 		numFixes += nfx
 		numFiles += nfi
 	}
-	log.Printf("Fixed %d for statements across %d files", numFixes, numFiles)
+	if *fix {
+		log.Printf("Fixed %d for statements across %d files", numFixes, numFiles)
+	}
 }
 
 func fixPackage(pkg *packages.Package) (numFixes, numFiles int) {
@@ -63,8 +70,19 @@ func fixPackage(pkg *packages.Package) (numFixes, numFiles int) {
 		if *verbose {
 			log.Printf("% 4d %s", len(targets), name)
 		}
-		if err := fixTargets(pkg, name, targets); err != nil {
-			log.Fatalf("Error editing %s: %s", name, err)
+		if *fix {
+			if err := fixTargets(pkg, name, targets); err != nil {
+				log.Fatalf("Error editing %s: %s", name, err)
+			}
+		} else {
+			for _, target := range targets {
+				pos := pkg.Fset.Position(target.stmt.For)
+				if target.constant {
+					fmt.Printf("%s: could use range-over-integer\n", pos)
+				} else {
+					fmt.Printf("%s: could possibly use range-over-integer (non-constant)\n", pos)
+				}
+			}
 		}
 	}
 	return numFixes, numFiles
@@ -72,6 +90,7 @@ func fixPackage(pkg *packages.Package) (numFixes, numFiles int) {
 
 type target struct {
 	stmt        *ast.ForStmt
+	constant    bool
 	bodyUsesVar bool
 }
 
@@ -82,12 +101,13 @@ func locateTargets(pkg *packages.Package, file *ast.File) []target {
 		if !ok {
 			return true
 		}
-		ident := stmtCanUseRange(pkg, stmt)
+		ident, constant := stmtCanUseRange(pkg, stmt)
 		if ident == nil {
 			return true
 		}
 		targ := target{
 			stmt:        stmt,
+			constant:    constant,
 			bodyUsesVar: bodyUses(pkg, stmt.Body, ident),
 		}
 		targets = append(targets, targ)
@@ -96,22 +116,24 @@ func locateTargets(pkg *packages.Package, file *ast.File) []target {
 	return targets
 }
 
-func stmtCanUseRange(pkg *packages.Package, stmt *ast.ForStmt) *ast.Ident {
+func stmtCanUseRange(pkg *packages.Package, stmt *ast.ForStmt) (ident *ast.Ident, constant bool) {
 	if stmt.Init == nil || stmt.Cond == nil || stmt.Post == nil {
-		return nil
+		return nil, false
 	}
-	ident := initIsSimpleDecl(pkg, stmt.Init)
+	ident = initIsSimpleDecl(pkg, stmt.Init)
 	if ident == nil {
-		return nil
+		return nil, false
 	}
 	obj := pkg.TypesInfo.Defs[ident]
-	if !condIsSimpleLessThan(pkg, stmt.Cond, obj) {
-		return nil
+	var simpleLessThan bool
+	simpleLessThan, constant = checkCond(pkg, stmt.Cond, obj)
+	if !simpleLessThan {
+		return nil, false
 	}
 	if !postIsIncrement(pkg, stmt.Post, obj) {
-		return nil
+		return nil, false
 	}
-	return ident
+	return ident, constant
 }
 
 func initIsSimpleDecl(pkg *packages.Package, init ast.Stmt) *ast.Ident {
@@ -179,19 +201,21 @@ func isLiteralInt(lit *ast.BasicLit, val int64) bool {
 	return n == val
 }
 
-func condIsSimpleLessThan(pkg *packages.Package, expr ast.Expr, varObj types.Object) bool {
+func checkCond(pkg *packages.Package, expr ast.Expr, varObj types.Object) (simpleLessThan, constant bool) {
 	bin, ok := expr.(*ast.BinaryExpr)
 	if !ok {
-		return false
+		return false, false
 	}
 	if bin.Op != token.LSS {
-		return false
+		return false, false
 	}
 	if !isMatchingIdent(pkg, bin.X, varObj) {
-		return false
+		return false, false
 	}
-	// Only accept conds with a constant value.
-	return pkg.TypesInfo.Types[bin.Y].Value != nil
+	if pkg.TypesInfo.Types[bin.Y].Value != nil {
+		return true, true
+	}
+	return true, false
 }
 
 func postIsIncrement(pkg *packages.Package, stmt ast.Stmt, varObj types.Object) bool {
