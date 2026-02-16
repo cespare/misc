@@ -1,6 +1,6 @@
 module github.com/cespare/misc
 
-go 1.23.0
+go 1.26.0
 
 require (
 	code.cloudfoundry.org/bytefmt v0.29.0
